@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # Neeko 智能客服主应用
+  neeko:
+    build: .
+    container_name: neeko-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mysql
+    volumes:
+      - ./logs:/app/logs
+      - ./source_photo:/app/source_photo
+      - ./recognize_photo:/app/recognize_photo
+      - ./check_error:/app/check_error
+    restart: unless-stopped
+    networks:
+      - neeko-network
+
+  # Celery Worker
+  celery-worker:
+    build: .
+    container_name: neeko-celery-worker
+    command: celery -A app.common.config.celery_app worker --loglevel=info --concurrency=4
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - mysql
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - neeko-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: neeko-redis
+    ports:
+      - "6385:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - neeko-network
+
+  # MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: neeko-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - neeko-network
+
+volumes:
+  redis-data:
+  mysql-data:
+
+networks:
+  neeko-network:
+    driver: bridge
